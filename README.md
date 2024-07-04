@@ -1,3 +1,13 @@
+# TL;DR
+
+```bash
+$ python sparse_autoencoder_KL.py
+$ python sparse_autoencoder_visualization.py
+$ python sparse_autoencoder_weight_visualization.py
+```
+
+---
+
 # Autoencoders-Variants
 
 This is a repository about *Pytorch* implementations of different *Autoencoder* variants on *MNIST* or *CIFAR-10* dataset just for studing so training hyperparameters have not been well-tuned. The following models are going to be implemented:
