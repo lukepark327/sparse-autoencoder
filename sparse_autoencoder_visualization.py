@@ -1,46 +1,82 @@
-import warnings
-warnings.filterwarnings('ignore')
-
+import seaborn as sns
+import data_utils
+from sparse_autoencoder_KL import SparseAutoencoderKL
 import torch
 import numpy as np
 import torchvision
 import matplotlib.pyplot as plt
+import warnings
+warnings.filterwarnings('ignore')
 
-from simple_autoencoder import Autoencoder
-from sparse_autoencoder_l1 import SparseAutoencoderL1
-from sparse_autoencoder_KL import SparseAutoencoderKL
+
+# from simple_autoencoder import Autoencoder
+# from sparse_autoencoder_l1 import SparseAutoencoderL1
 
 if __name__ == '__main__':
 
-    autoencoder = Autoencoder()
-    sparse_autoencoder_l1 = SparseAutoencoderL1()
+    # autoencoder = Autoencoder()
+    # sparse_autoencoder_l1 = SparseAutoencoderL1()
     sparse_autoencoder_kl = SparseAutoencoderKL()
 
-    autoencoder.load_state_dict(torch.load('./history/simple_autoencoder.pt'))
-    sparse_autoencoder_l1.load_state_dict(torch.load('./history/sparse_autoencoder_l1.pt'))
-    sparse_autoencoder_kl.load_state_dict(torch.load('./history/sparse_autoencoder_KL.pt'))
+    # autoencoder.load_state_dict(torch.load('./history/simple_autoencoder.pt'))
+    # sparse_autoencoder_l1.load_state_dict(torch.load('./history/sparse_autoencoder_l1.pt'))
+    sparse_autoencoder_kl.load_state_dict(torch.load(
+        './history/sparse_autoencoder_KL.pt', map_location=torch.device('cpu')))
 
-    autoencoder.cpu()
-    sparse_autoencoder_l1.cpu()
+    # autoencoder.cpu()
+    # sparse_autoencoder_l1.cpu()
     sparse_autoencoder_kl.cpu()
 
-    autoencoder_weigths = autoencoder.state_dict()['encoder.0.weight'].view(128, 1, 28, 28)
-    sae_l1_weights = sparse_autoencoder_l1.state_dict()['encoder.0.weight'].view(128, 1, 28, 28)
-    sae_kl_weights = sparse_autoencoder_kl.state_dict()['encoder.0.weight'].view(128, 1, 28, 28)
+    BATCH_SIZE = 128
+    train_loader, test_loader = data_utils.load_mnist(BATCH_SIZE)
+    # Extract one image for each digit (0 through 9)
+    digits = list(range(10))
+    images = []
+    labels = []
+    for img, label in test_loader.dataset:
+        if label in digits:
+            images.append(img)
+            labels.append(label)
+            digits.remove(label)
+        if not digits:
+            break
+    # Sort images and labels by label
+    sorted_images = [img for _, img in sorted(
+        zip(labels, images), key=lambda pair: pair[0])]
+    sorted_labels = sorted(labels)
 
-    torch_scale = lambda x: (x - torch.min(x)) / (torch.max(x) - torch.min(x))
-    ae_weights_norm = torch_scale(autoencoder_weigths)
-    sae_l1_weights_norm = torch_scale(sae_l1_weights)
-    sae_kl_weights_norm = torch_scale(sae_kl_weights)
+    images = torch.stack(sorted_images)
+    labels = torch.tensor(sorted_labels)
+
+    # Get the vector representation from the encoder
+    with torch.no_grad():
+        encoded_imgs = sparse_autoencoder_kl.encoder(images.view(-1, 784))
+
+    """Vector Representation"""
+
+    encoded_imgs_np = encoded_imgs.numpy()
 
     plt.figure(figsize=(12, 6))
-    plt.subplot(131)
-    plt.title('Autoencoder')
-    plt.imshow(np.transpose(torchvision.utils.make_grid(ae_weights_norm).numpy(), (1, 2, 0)))
-    plt.subplot(132)
-    plt.title('Sparse Autoencoder with L1 Reg')
-    plt.imshow(np.transpose(torchvision.utils.make_grid(sae_l1_weights_norm).numpy(), (1, 2, 0)))
-    plt.subplot(133)
-    plt.title('Sparse Autoencoder with KL divergence')
-    plt.imshow(np.transpose(torchvision.utils.make_grid(sae_kl_weights_norm).numpy(), (1, 2, 0)))
-    plt.savefig('./images/sparse_autoencoder_visualization.png')
+    sns.heatmap(encoded_imgs_np, cmap='binary', cbar=True,
+                linewidths=0.1, linecolor='black', yticklabels=sorted_labels)
+    plt.title('Sparsity in Vector Representation (Latent Space) for Digits 0-9')
+    plt.xlabel('Latent Dimensions')
+    plt.ylabel('Digits')
+    plt.savefig('./images/vector_representation_sparsity_digits.png')
+    # plt.show()
+
+    """Inner Product"""
+
+    encoded_imgs_np = encoded_imgs.numpy()
+
+    # Calculate inner product values between each pair of latent vectors
+    inner_product_matrix = np.dot(encoded_imgs_np, encoded_imgs_np.T)
+
+    plt.figure(figsize=(10, 8))
+    sns.heatmap(inner_product_matrix, annot=True, fmt=".2f", cmap='binary',
+                xticklabels=sorted_labels, yticklabels=sorted_labels)
+    plt.title('Inner Product of Latent Vectors for Digits 0-9')
+    plt.xlabel('Digits')
+    plt.ylabel('Digits')
+    plt.savefig('./images/inner_product_heatmap.png')
+    # plt.show()

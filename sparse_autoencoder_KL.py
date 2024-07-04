@@ -136,7 +136,7 @@ if __name__ == '__main__':
         print('Trainig Complete with best validation loss {:.4f}'.format(BEST_VAL))
 
     else:
-        autoencoder.load_state_dict(torch.load('./history/sparse_autoencoder_KL.pt'))
+        autoencoder.load_state_dict(torch.load('./history/sparse_autoencoder_KL.pt', map_location=torch.device('cpu')))
         evaluation(autoencoder, test_loader)
 
         autoencoder.cpu()
